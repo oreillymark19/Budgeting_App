@@ -14,6 +14,7 @@ DATA_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "data", "raw"))
 DB_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "data", "budget.db"))
 MAPPING_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "config", "mapping.json"))
 BLACKLIST_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "config", "blacklist.json"))
+NO_AUTO_CLASSIFY_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "config", "no_auto_classify.json"))
 LOG_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "logs"))
 LOG_FILE = os.path.join(LOG_DIR, f"budget_sync_{datetime.now().strftime('%Y-%m')}.log")
 
@@ -113,6 +114,13 @@ def generate_hashes(df: pd.DataFrame) -> pd.DataFrame:
     df['transaction_id'] = df.apply(create_hash, axis=1)
     return df
 
+def load_no_auto_classify() -> List[str]:
+    """Substrings that should never trigger auto-classification."""
+    if not os.path.exists(NO_AUTO_CLASSIFY_PATH):
+        return []
+    with open(NO_AUTO_CLASSIFY_PATH, 'r') as f:
+        return json.load(f)
+
 def apply_mappings(df: pd.DataFrame) -> pd.DataFrame:
     """Checks for known vendor substrings in mapping.json and assigns categories."""
     if not os.path.exists(MAPPING_PATH) or df.empty:
@@ -121,8 +129,13 @@ def apply_mappings(df: pd.DataFrame) -> pd.DataFrame:
     with open(MAPPING_PATH, 'r') as f:
         mapping = json.load(f)
 
+    no_classify = load_no_auto_classify()
+
     def find_match(description):
         desc_lower = str(description).lower()
+        # Hands off if the vendor is on the no-auto-classify list
+        if any(term in desc_lower for term in no_classify):
+            return None
         for vendor_key, category in mapping.items():
             # Matches if your mapping key (e.g., 'uber') is in the description
             if vendor_key in desc_lower:

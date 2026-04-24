@@ -18,6 +18,7 @@ config = load_config()
 DB_PATH = r".\data\budget.db"
 BLACKLIST_PATH = r".\config\blacklist.json"
 MAPPING_PATH = r".\config\mapping.json"
+NO_AUTO_CLASSIFY_PATH = r".\config\no_auto_classify.json"
 
 st.set_page_config(page_title="Local Budget Tracker", layout="wide")
 
@@ -72,16 +73,32 @@ def apply_category_updates(changes_dict, original_df):
     
     st.success("Database and Memory updated!")
 
+def load_no_auto_classify():
+    if not os.path.exists(NO_AUTO_CLASSIFY_PATH):
+        return []
+    with open(NO_AUTO_CLASSIFY_PATH, 'r') as f:
+        return json.load(f)
+
+def save_no_auto_classify(items):
+    os.makedirs(os.path.dirname(NO_AUTO_CLASSIFY_PATH), exist_ok=True)
+    with open(NO_AUTO_CLASSIFY_PATH, 'w') as f:
+        json.dump(sorted(set(items)), f, indent=4)
+
 def update_mapping_memory(description, category):
+    vendor_key = description.strip().lower()
+
+    # Skip memory-writes for vendors the user has opted out of auto-classification
+    no_classify = load_no_auto_classify()
+    if any(term in vendor_key for term in no_classify):
+        return
+
     mapping = {}
     if os.path.exists(MAPPING_PATH):
         with open(MAPPING_PATH, 'r') as f:
             mapping = json.load(f)
-    
-    # Store a clean substring of the vendor name
-    vendor_key = description.strip().lower()
+
     mapping[vendor_key] = category
-    
+
     with open(MAPPING_PATH, 'w') as f:
         json.dump(mapping, f, indent=4)
 
@@ -93,7 +110,7 @@ df_all = get_data() # Get all to find available months
 st.sidebar.title("Navigation")
 page = st.sidebar.selectbox(
     "Go to", 
-    ["📊 Monthly Analytics", "📅 Custom Date View", "🗂️ Transactions by Category", "❓ Uncategorized Transactions", "⚙️ Manage Data", "📥 Upload Transactions"]
+    ["📊 Monthly Analytics", "📅 Custom Date View", "🗂️ Transactions by Category", "❓ Uncategorized Transactions", "🚫 Vendor Rules", "⚙️ Manage Data", "📥 Upload Transactions"]
 )
 
 if not df_all.empty:
@@ -253,21 +270,31 @@ elif page == "📅 Custom Date View":
 
 elif page == "🗂️ Transactions by Category":
     st.subheader(f"Categorized Spending for {selected_month}")
-    
+    st.caption("Edit the Category column to re-categorize a transaction. Changes update both the database and the auto-classify memory.")
+
     # Filter for only items that HAVE a category
-    categorized_df = df[df['Category'].notna() & (df['Category'] != "")]
-    
+    categorized_df = df[df['Category'].notna() & (df['Category'] != "")].reset_index(drop=True)
+
     if not categorized_df.empty:
-        st.dataframe(
+        st.data_editor(
             categorized_df,
             use_container_width=True,
             column_config={
-                "transaction_id": None,  # Hides the column from the UI
+                "transaction_id": None,
+                "Month_Year": None,
+                "Category": st.column_config.SelectboxColumn("Category", options=config['categories']),
                 "Amount": st.column_config.NumberColumn(format="$%.2f"),
                 "Transaction_Date": "Date"
             },
-            hide_index=True
+            disabled=["transaction_id", "Description", "Amount", "Transaction_Date", "Account_Type"],
+            hide_index=True,
+            key="categorized_editor"
         )
+
+        changes = st.session_state["categorized_editor"]["edited_rows"]
+        if changes and st.button("Save Changes to Database"):
+            apply_category_updates(changes, categorized_df)
+            st.rerun()
     else:
         st.info("No transactions have been categorized for this month yet.")
 
@@ -298,6 +325,43 @@ elif page == "❓ Uncategorized Transactions":
             st.rerun() # Refresh to move items out of 'Uncategorized'
     else:
         st.success("Everything is categorized!")
+
+elif page == "🚫 Vendor Rules":
+    st.subheader("🚫 Never Auto-Classify")
+    st.caption(
+        "Add description substrings (case-insensitive) that should stay uncategorized. "
+        "Useful for stores like Walmart where the right category depends on what was bought. "
+        "Existing transactions keep their current category — this only affects new imports and future edits."
+    )
+
+    no_classify = load_no_auto_classify()
+
+    with st.form("add_no_classify_rule", clear_on_submit=True):
+        new_term = st.text_input("Substring to block (e.g. 'walmart')")
+        submitted = st.form_submit_button("Add Rule")
+        if submitted:
+            term = new_term.strip().lower()
+            if not term:
+                st.warning("Enter a non-empty substring.")
+            elif term in no_classify:
+                st.info(f"'{term}' is already on the list.")
+            else:
+                no_classify.append(term)
+                save_no_auto_classify(no_classify)
+                st.success(f"Added '{term}'.")
+                st.rerun()
+
+    st.write("### Current Rules")
+    if no_classify:
+        for term in sorted(no_classify):
+            col1, col2 = st.columns([4, 1])
+            col1.code(term, language=None)
+            if col2.button("Remove", key=f"rm_{term}"):
+                no_classify.remove(term)
+                save_no_auto_classify(no_classify)
+                st.rerun()
+    else:
+        st.info("No rules yet. Add one above to stop auto-classification for specific vendors.")
 
 elif page == "⚙️ Manage Data":
     st.subheader("Delete Transactions")
