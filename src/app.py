@@ -8,17 +8,19 @@ from datetime import datetime
 import plotly.express as px
 import subprocess
 
-os.chdir("C:\\Users\\oreil\\Documents\\Budgeting_App\\")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "config", "config.json"))
+DB_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "data", "budget.db"))
+BLACKLIST_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "config", "blacklist.json"))
+MAPPING_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "config", "mapping.json"))
+NO_AUTO_CLASSIFY_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "config", "no_auto_classify.json"))
+
 # --- Load Configurations ---
 def load_config():
-    with open('./config/config.json', 'r') as f:
+    with open(CONFIG_PATH, 'r') as f:
         return json.load(f)
 
 config = load_config()
-DB_PATH = r".\data\budget.db"
-BLACKLIST_PATH = r".\config\blacklist.json"
-MAPPING_PATH = r".\config\mapping.json"
-NO_AUTO_CLASSIFY_PATH = r".\config\no_auto_classify.json"
 
 st.set_page_config(page_title="Local Budget Tracker", layout="wide")
 
