@@ -147,35 +147,47 @@ st.sidebar.metric("Safe to Spend", f"${remaining:,.2f}",
 
 if page == "📊 Monthly Analytics":
     st.subheader(f"Spending Summary: {selected_month}")
-    # Visualization with Savings Goal
-    fig = go.Figure(go.Indicator(
-        mode = "gauge+number+delta",
-        value = total_out,
-        number = {'prefix': " Spent: $"},
-        domain = {'x': [0, 1], 'y': [0, 1]},
-        delta = {'reference': income - config['savings_goal'], 'valueformat': '$', 'position': "top"},
-        gauge = {
-            'axis': {'range': [0, income], 'tickformat': '$'},
-            'bar': {'color':  "#ff4b4b"},
-            'steps': [
-                {'range': [0, fixed_total], 'color': "#ff4b4b"},
-                {'range': [income - config['savings_goal'], income], 'color': "#2ca02c"}
-            ],
-            'threshold': {
-                'line': {'color': "black", 'width': 4},
-                'thickness': 0.75,
-                'value': income - config['savings_goal']
-            }
-        }
-    ))
 
-    # Enable hover interactions
-    fig.update_layout(
-        hovermode='closest',
-        margin=dict(l=20, r=20, t=50, b=20)
-    )
+    spend_df = df[~df['Category'].isin(['Income', 'Investment', 'Housing']) & df['Category'].notnull()].copy()
+    max_spend = income - config['savings_goal']
 
-    st.plotly_chart(fig, use_container_width=True)
+    if not spend_df.empty:
+        spend_df['Transaction_Date'] = pd.to_datetime(spend_df['Transaction_Date'])
+        spend_df['Day'] = spend_df['Transaction_Date'].dt.day
+
+        daily_spending = spend_df.groupby('Day')['Amount'].sum().mul(-1)
+        last_day = int(daily_spending.index.max())
+        all_days = pd.Index(range(1, last_day + 1), name='Day')
+        cumulative = daily_spending.reindex(all_days, fill_value=0).cumsum()
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=cumulative.index,
+            y=cumulative.values,
+            mode='lines+markers',
+            line=dict(shape='spline', color='#ff4b4b', width=3),
+            name='Cumulative Spending',
+            hovertemplate='Day %{x}<br>Cumulative: $%{y:,.2f}<extra></extra>'
+        ))
+        fig.add_hline(
+            y=max_spend,
+            line_dash='dash',
+            line_color='#2ca02c',
+            annotation_text=f"Max Spend: ${max_spend:,.2f}",
+            annotation_position='top right'
+        )
+        fig.update_layout(
+            title=f"Cumulative Variable Spending: {selected_month}",
+            xaxis_title="Day of Month",
+            yaxis_title="Total Spending ($)",
+            xaxis=dict(dtick=1),
+            yaxis=dict(tickprefix='$', tickformat=',.0f'),
+            hovermode='x unified',
+            margin=dict(l=20, r=20, t=50, b=20)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No variable spending recorded for this month yet.")
 
     st.write("### Income, Investment & Housing")
     if not df.empty:
