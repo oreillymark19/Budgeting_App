@@ -149,7 +149,7 @@ if page == "📊 Monthly Analytics":
     st.subheader(f"Spending Summary: {selected_month}")
 
     spend_df = df[~df['Category'].isin(['Income', 'Investment', 'Housing']) & df['Category'].notnull()].copy()
-    max_spend = income - config['savings_goal']
+    max_spend = income - config['savings_goal'] - fixed_total
 
     if not spend_df.empty:
         spend_df['Transaction_Date'] = pd.to_datetime(spend_df['Transaction_Date'])
@@ -188,36 +188,6 @@ if page == "📊 Monthly Analytics":
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No variable spending recorded for this month yet.")
-
-    st.write("### Income, Investment & Housing")
-    if not df.empty:
-        key_cats = ['Income', 'Investment', 'Housing']
-        key_totals = (
-            df[df['Category'].isin(key_cats)]
-            .groupby('Category')['Amount']
-            .sum()
-            .abs()
-            .reindex(key_cats, fill_value=0)
-            .reset_index()
-        )
-
-        fig_key = px.bar(
-            key_totals,
-            x='Category',
-            y='Amount',
-            color='Category',
-            text_auto='.2s',
-            title=f"Totals for {selected_month}",
-            labels={'Amount': 'Total ($)'},
-            category_orders={'Category': key_cats}
-        )
-        fig_key.update_traces(
-            hovertemplate="<b>%{x}</b><br>Total: $%{y:,.2f}<extra></extra>",
-            marker_line_color='rgb(8,48,107)',
-            marker_line_width=1.5,
-            opacity=0.8
-        )
-        st.plotly_chart(fig_key, use_container_width=True)
 
     col1, col2 = st.columns([2, 1])
     
@@ -259,6 +229,36 @@ if page == "📊 Monthly Analytics":
             # Show percentage of variable budget
             total_var = df[~df['Category'].isin(['Income','Investment','Housing'])]['Amount'].sum()
             st.info(f"Total Variable Spending: ${total_var:,.2f}")
+    
+    st.write("### Income, Investment & Housing")
+    if not df.empty:
+        key_cats = ['Income', 'Investment', 'Housing']
+        key_totals = (
+            df[df['Category'].isin(key_cats)]
+            .groupby('Category')['Amount']
+            .sum()
+            .abs()
+            .reindex(key_cats, fill_value=0)
+            .reset_index()
+        )
+
+        fig_key = px.bar(
+            key_totals,
+            x='Category',
+            y='Amount',
+            color='Category',
+            text_auto='.2s',
+            title=f"Totals for {selected_month}",
+            labels={'Amount': 'Total ($)'},
+            category_orders={'Category': key_cats}
+        )
+        fig_key.update_traces(
+            hovertemplate="<b>%{x}</b><br>Total: $%{y:,.2f}<extra></extra>",
+            marker_line_color='rgb(8,48,107)',
+            marker_line_width=1.5,
+            opacity=0.8
+        )
+        st.plotly_chart(fig_key, use_container_width=True)
 
 elif page == "📅 Custom Date View":
     st.subheader("📅 Custom Date View")
