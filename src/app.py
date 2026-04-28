@@ -177,6 +177,36 @@ if page == "📊 Monthly Analytics":
 
     st.plotly_chart(fig, use_container_width=True)
 
+    st.write("### Income, Investment & Housing")
+    if not df.empty:
+        key_cats = ['Income', 'Investment', 'Housing']
+        key_totals = (
+            df[df['Category'].isin(key_cats)]
+            .groupby('Category')['Amount']
+            .sum()
+            .abs()
+            .reindex(key_cats, fill_value=0)
+            .reset_index()
+        )
+
+        fig_key = px.bar(
+            key_totals,
+            x='Category',
+            y='Amount',
+            color='Category',
+            text_auto='.2s',
+            title=f"Totals for {selected_month}",
+            labels={'Amount': 'Total ($)'},
+            category_orders={'Category': key_cats}
+        )
+        fig_key.update_traces(
+            hovertemplate="<b>%{x}</b><br>Total: $%{y:,.2f}<extra></extra>",
+            marker_line_color='rgb(8,48,107)',
+            marker_line_width=1.5,
+            opacity=0.8
+        )
+        st.plotly_chart(fig_key, use_container_width=True)
+
     col1, col2 = st.columns([2, 1])
     
     with col1:
