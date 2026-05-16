@@ -222,12 +222,41 @@ if page == "📊 Monthly Analytics":
     with col2:
         st.write("### Quick Breakdown")
         if not df.empty:
-            # Display a clean summary table
-            summary_table = df[~df['Category'].isin(['Income','Investment','Housing'])].groupby('Category')['Amount'].sum().sort_values(ascending=False)
-            st.table(summary_table.map("${:,.2f}".format))
-            
-            # Show percentage of variable budget
-            total_var = df[~df['Category'].isin(['Income','Investment','Housing'])]['Amount'].sum()
+            current_month_totals = (
+                df[~df['Category'].isin(['Income', 'Investment', 'Housing'])]
+                .groupby('Category')['Amount']
+                .sum()
+                .mul(-1)
+                .sort_values(ascending=False)
+            )
+
+            selected_dt = pd.to_datetime(selected_month + '-01')
+            prior_months = [(selected_dt - pd.DateOffset(months=i)).strftime('%Y-%m') for i in range(1, 4)]
+            prior_df = df_all[
+                df_all['Month_Year'].isin(prior_months) &
+                ~df_all['Category'].isin(['Income', 'Investment', 'Housing'])
+            ]
+            if not prior_df.empty:
+                prior_avg = (
+                    prior_df.groupby(['Month_Year', 'Category'])['Amount']
+                    .sum()
+                    .mul(-1)
+                    .groupby('Category')
+                    .mean()
+                )
+            else:
+                prior_avg = pd.Series(dtype=float)
+
+            summary_df = pd.DataFrame({'This Month': current_month_totals})
+            summary_df['3-Mo Avg'] = prior_avg
+            summary_df = summary_df.fillna(0)
+
+            st.dataframe(
+                summary_df.style.format('${:,.2f}'),
+                use_container_width=True
+            )
+
+            total_var = df[~df['Category'].isin(['Income', 'Investment', 'Housing'])]['Amount'].sum()
             st.info(f"Total Variable Spending: ${total_var:,.2f}")
     
     st.write("### Income, Investment & Housing")
